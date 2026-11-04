@@ -21,7 +21,9 @@ async function load(files){
    if(!a||!b)continue;
    let uid=b.getAttribute('UniqueID');
    if(!uid||byId.has(uid))fail('Doppelte oder fehlende Sender-ID: '+uid);
-   let ch={uid,name:decode(a.getAttribute('ChannelName'))||'(Unbenannt)',number:a.getAttribute('ChannelNumber')||''};
+   let ch={uid,name:decode(a.getAttribute('ChannelName'))||'(Unbenannt)',number:a.getAttribute('ChannelNumber')||'',
+     scrambled:a.getAttribute('Scrambled'),locked:a.getAttribute('ChannelLock'),
+     encrypted:a.getAttribute('Scrambled')!=='0',parentalLocked:a.getAttribute('ChannelLock')!=='0'};
    channels.push(ch);byId.set(uid,ch);
  }
  if(!channels.length)fail('Keine Sender in DVBS.xml gefunden.');
@@ -38,7 +40,11 @@ async function load(files){
  if(new Set(fav.map(x=>x.uid)).size!==fav.length||fav.some((x,i)=>x.num!==i))fail('Doppelte IDs oder lückenhafte Favoritennummern.');
  Object.assign(S,{files,channels,byId,xml:fv,original:fav.map(x=>x.uid),fav:fav.map(x=>x.uid),history:[],changed:0,loaded:true,drag:null});
  $('total').textContent=channels.length.toLocaleString('de-DE');$('favname').textContent=decode(list[0].getAttribute('Name'))||'Fav1';
- $('filecount').textContent=files.size;$('export').disabled=false;$('search').value='';render();
+ $('filecount').textContent=files.size;
+ $('encryptedcount').textContent=channels.filter(x=>x.scrambled==='1').length.toLocaleString('de-DE');
+ $('lockedcount').textContent=channels.filter(x=>x.locked==='1').length.toLocaleString('de-DE');
+ $('filterEncrypted').checked=true;$('filterLocked').checked=true;
+ $('export').disabled=false;$('search').value='';render();
  status('Import erfolgreich: '+channels.length+' Sender, '+fav.length+' Favoriten. Alle Dateien bleiben lokal.');
 }
 async function importFolder(list){let m=new Map();for(let file of list)m.set(file.webkitRelativePath.replaceAll('\\','/'),{text:()=>file.text(),bytes:()=>file.arrayBuffer()});await load(m);}
@@ -54,7 +60,9 @@ function render(){
  $('favcount').textContent=S.fav.length;$('changes').textContent=S.changed;$('undo').disabled=!S.history.length;
  $('reset').disabled=S.original.join('|')===S.fav.join('|');
  let term=$('search').value.toLocaleLowerCase('de').trim(),chosen=new Set(S.fav);
- let found=S.channels.filter(x=>x.name.toLocaleLowerCase('de').includes(term)||x.number.includes(term));
+ let hideEncrypted=$('filterEncrypted').checked,hideLocked=$('filterLocked').checked;
+ let found=S.channels.filter(x=>(!hideEncrypted||!x.encrypted)&&(!hideLocked||!x.parentalLocked)&&
+   (x.name.toLocaleLowerCase('de').includes(term)||x.number.includes(term)));
  $('allfoot').textContent=found.length+' Treffer'+(found.length>250?' (erste 250 angezeigt)':'');
  let a=$('all');a.replaceChildren();
  for(let c of found.slice(0,250)){
@@ -114,6 +122,8 @@ function error(e){console.error(e);status(e.message||String(e),true);}
 $('folder').onchange=async e=>{try{if(e.target.files.length)await importFolder(e.target.files)}catch(x){error(x)}finally{e.target.value=''}};
 $('zipfile').onchange=async e=>{try{if(e.target.files.length)await importZip(e.target.files[0])}catch(x){error(x)}finally{e.target.value=''}};
 $('search').oninput=()=>{if(S.loaded)render()};
+$('filterEncrypted').onchange=()=>{if(S.loaded)render()};
+$('filterLocked').onchange=()=>{if(S.loaded)render()};
 $('undo').onclick=()=>{if(!S.history.length)return;S.fav=S.history.pop();S.changed++;render()};
 $('reset').onclick=()=>mutate(()=>{S.fav=[...S.original]});
 $('export').onclick=async()=>{try{$('export').disabled=true;await exportAll()}catch(x){error(x)}finally{$('export').disabled=!S.loaded}};
