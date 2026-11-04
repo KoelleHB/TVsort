@@ -148,8 +148,9 @@ $('reset').onclick=()=>mutate(()=>{S.fav=[...S.original]});
 $('export').onclick=async()=>{try{$('export').disabled=true;await exportAll()}catch(x){error(x)}finally{$('export').disabled=!S.loaded}};
 
 async function bridgeRequest(endpoint, options={}){
- const headers={'X-TVsort-Token':bridge.token,...(options.headers||{})};
- const result=await fetch('/api/'+endpoint,{method:'POST',headers,...options,cache:'no-store'});
+ const {headers:extraHeaders={},...rest}=options;
+ const headers={'X-TVsort-Token':bridge.token,...extraHeaders};
+ const result=await fetch('/api/'+endpoint,{method:'POST',...rest,headers,cache:'no-store'});
  if(!result.ok){
    let message='Fehler '+result.status;
    try{message=(await result.json()).error||message}catch{}
