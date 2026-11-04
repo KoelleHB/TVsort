@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>TVsort · Philips Senderlisten</title>
+<style>
+:root{font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#182231;background:#f5f7fa;font-synthesis:none}*{box-sizing:border-box}
+body{margin:0}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.43}
+.top{background:#101b2d;color:white;padding:18px max(24px,calc((100vw - 1400px)/2));display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:800;font-size:24px;letter-spacing:-.7px}.brand span{color:#6bd5c1}.sub{font-size:13px;color:#aab8cd}
+main{max-width:1440px;margin:auto;padding:24px}.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.btn,.file-label{border:1px solid #cbd5e1;background:white;color:#17253a;border-radius:9px;padding:9px 13px;font-weight:650}
+.btn:hover:not(:disabled),.file-label:hover{background:#eef6ff}.primary{background:#157b70;color:white;border-color:#157b70}.primary:hover:not(:disabled){background:#11665e}.danger{color:#b13a3a}
+input[type=file]{display:none}.intro{padding:18px 20px;background:white;border:1px solid #dce4ec;border-radius:13px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.intro h1{margin:0 0 4px;font-size:20px}.muted{color:#67768a}.small{font-size:12px}.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat{padding:12px 16px;border:1px solid #dbe4ee;background:#fff;border-radius:10px;min-width:130px}.stat strong{display:block;font-size:22px}.stat span{color:#67768a;font-size:12px}
+.workspace{display:grid;grid-template-columns:1fr 1fr;gap:18px}.pane{background:white;border:1px solid #dbe4ee;border-radius:13px;overflow:hidden;min-width:0}
+.panehead{padding:17px;border-bottom:1px solid #e4e9ef}.panehead h2{font-size:17px;margin:0 0 12px;display:flex;justify-content:space-between}
+.search{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;outline-color:#157b70}
+.list{height:min(58vh,620px);overflow:auto}.item{display:flex;gap:9px;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f3f6;min-height:51px}.item:hover{background:#f8fafc}.item.dragging{opacity:.45}.item.dragover{border-top:3px solid #157b70}
+.item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550}.number{font-size:12px;color:#66758a;min-width:45px}.pos{display:inline-grid;place-items:center;width:34px;height:29px;border-radius:7px;background:#edf4f5;color:#156b63;font-weight:700;font-size:12px}
+.iconbtn{border:1px solid #d7e0e8;background:white;border-radius:7px;padding:5px 9px;color:#31445a;min-width:33px}
+.iconbtn:hover:not(:disabled){background:#e5f5f1}.empty{padding:42px 20px;text-align:center;color:#718096}
+.foot{padding:13px 16px;border-top:1px solid #e4e9ef;color:#68778a;font-size:12px}
+.status{margin:16px 0;border-radius:10px;background:#e8f7f1;color:#17634f;padding:12px 14px;white-space:pre-line}
+.status.error{background:#fff0ef;color:#a43e37}.warning{border:1px solid #f1dba4;background:#fffaf0;color:#805d15;padding:12px 14px;border-radius:10px;margin-top:20px;font-size:13px}
+.tag{font-size:11px;border-radius:999px;background:#e9f0f9;color:#35557c;padding:3px 8px}
+[hidden]{display:none!important}
+@media(max-width:850px){.workspace{grid-template-columns:1fr}.list{height:350px}main{padding:14px}.top{padding:16px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+<script src="./app.js" defer></script>
+</head>
+<body>
+<header class="top"><div><div class="brand">TV<span>sort</span></div><div class="sub">Dein Philips-Senderlisteneditor · privat im Browser</div></div><div class="toolbar"><span class="tag">ChannelMap_110</span><a style="color:#c5e9e1" href="https://github.com/KoelleHB/TVsort" target="_blank" rel="noopener noreferrer">GitHub</a></div></header>
+<main>
+<section class="intro"><div><h1>Senderlisten bearbeiten</h1><div class="muted">Öffne den vollständigen PhilipsChannelMaps-Ordner oder ein ZIP des Exports.</div></div>
+<div class="toolbar"><label class="file-label" for="folder">📁 Ordner öffnen</label><input id="folder" type="file" webkitdirectory multiple><label class="file-label" for="zipfile">ZIP öffnen</label><input id="zipfile" type="file" accept=".zip,application/zip"><button class="btn primary" id="export" disabled>↓ Export als ZIP</button></div></section>
+<div id="status" class="status" hidden role="status" aria-live="polite"></div>
+<div class="stats"><div class="stat"><strong id="total">–</strong><span>Satellitensender</span></div><div class="stat"><strong id="favcount">–</strong><span>Favoriten in Liste 1</span></div><div class="stat"><strong id="changes">0</strong><span>Änderungen</span></div><div class="stat"><strong id="filecount">–</strong><span>Originaldateien</span></div></div>
+<div class="workspace">
+<section class="pane"><div class="panehead"><h2>Senderbibliothek <span class="tag">DVB-S</span></h2><input class="search" id="search" type="search" placeholder="Sender suchen – z. B. ARD, ZDF, RTL" aria-label="Sender suchen"></div><div class="list" id="all"><div class="empty">Bitte zuerst einen Philips-Export öffnen.</div></div><div class="foot" id="allfoot">Sender suchen und mit + zur Favoritenliste hinzufügen.</div></section>
+<section class="pane"><div class="panehead"><h2>Favoritenliste 1 <span class="tag" id="favname">Fav1</span></h2><div class="toolbar"><button class="btn" id="undo" disabled>↶ Rückgängig</button><button class="btn danger" id="reset" disabled>Zurücksetzen</button><span class="muted small">Ziehen oder mit ↑ ↓ sortieren</span></div></div><div class="list" id="favorites"><div class="empty">Hier erscheinen deine Favoriten.</div></div><div class="foot">Es werden ausschließlich Favoriteneinträge bearbeitet. Normale Sendernummern bleiben unverändert.</div></section>
+</div>
+<div class="warning"><strong>Wichtig:</strong> Der ZIP-Export enthält alle Originaldateien; nur Favorite.xml wird bei Änderungen angepasst. Ob dein Philips den veränderten Export akzeptiert, ist noch nicht getestet. Originalbackup behalten und keinen Import ohne Prüfung vornehmen. Alle Daten werden lokal im Browser verarbeitet.</div>
+</main></body></html>
