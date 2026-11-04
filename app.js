@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id);
 const S={files:new Map(),channels:[],byId:new Map(),original:[],fav:[],history:[],xml:'',changed:0,loaded:false,drag:null};
 const PAGE_SIZE=100;
+const bridge={token:null,baseline:null,connected:false};
 let libraryPage=0;
 const required=['ChannelList/Favorite.xml','ChannelList/s2channellib/DVBS.xml','ChannelList/channelFile.bin','ChannelList/chanLst.bin'];
 function status(s,err=false){let e=$('status');e.hidden=false;e.className=err?'status error':'status';e.textContent=s;}
@@ -120,12 +121,15 @@ function createXml(){
  if(ids.join('|')!==S.fav.join('|'))fail('Exportprüfung fehlgeschlagen.');
  return result;
 }
-async function exportAll(){
+async function makeExportBlob(){
  if(typeof JSZip==='undefined')fail('JSZip ist nicht verfügbar. Internetverbindung prüfen.');
  if(new Set(S.fav).size!==S.fav.length||S.fav.some(x=>!S.byId.has(x)))fail('Ungültige Favoriten.');
  let favorite=path(S.files,required[0]),xml=createXml(),zip=new JSZip();
  for(let [p,v] of S.files)zip.file(p,p===favorite?xml:await v.bytes());
- let blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+ return zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+}
+async function exportAll(){
+ let blob=await makeExportBlob();
  let u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='TVsort-PhilipsChannelMaps-ChannelMap_110.zip';
  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);
  status('Export erstellt: '+S.files.size+' Dateien. Unverändertes Originalbackup behalten! Der TV-Rückimport wurde noch nicht verifiziert.');
@@ -142,3 +146,65 @@ $('filterTv').onchange=()=>{libraryPage=0;if(S.loaded)render()};
 $('undo').onclick=()=>{if(!S.history.length)return;S.fav=S.history.pop();S.changed++;render()};
 $('reset').onclick=()=>mutate(()=>{S.fav=[...S.original]});
 $('export').onclick=async()=>{try{$('export').disabled=true;await exportAll()}catch(x){error(x)}finally{$('export').disabled=!S.loaded}};
+
+async function bridgeRequest(endpoint, options={}){
+ const headers={'X-TVsort-Token':bridge.token,...(options.headers||{})};
+ const result=await fetch('/api/'+endpoint,{method:'POST',headers,...options,cache:'no-store'});
+ if(!result.ok){
+   let message='Fehler '+result.status;
+   try{message=(await result.json()).error||message}catch{}
+   throw Error(message);
+ }
+ return result;
+}
+async function initBridge(){
+ if(!['localhost','127.0.0.1'].includes(window.location.hostname))return;
+ try{
+   const response=await fetch('/api/status',{cache:'no-store'});
+   if(!response.ok)return;
+   const data=await response.json();
+   bridge.token=data.token;bridge.connected=!!data.connected;
+   $('bridgePanel').hidden=false;
+   $('bridgeState').textContent=data.connected?'ADB verbunden · USB '+data.volume:'ADB/USB nicht bereit: '+(data.error||'Unbekannt');
+   for(const id of ['bridgeLoad','bridgeBackup'])$(id).disabled=!data.connected;
+   $('bridgeApply').disabled=!data.connected||!S.loaded;
+ }catch(err){console.debug('Bridge nicht verfügbar:',err);}
+}
+async function bridgeBusy(button, task){
+ button.disabled=true;
+ try{await task()}catch(err){error(err)}
+ finally{await initBridge();}
+}
+$('bridgeLoad').onclick=()=>bridgeBusy($('bridgeLoad'),async()=>{
+ if(S.loaded&&S.original.join('|')!==S.fav.join('|')&&!confirm('Ungespeicherte Änderungen verwerfen und USB-Export neu laden?'))return;
+ status('Lese USB-Export via ADB und erstelle Backup …');
+ const response=await bridgeRequest('load');
+ const blob=await response.blob();
+ await importZip(new File([blob],'PhilipsChannelMaps.zip',{type:'application/zip'}));
+ bridge.baseline=response.headers.get('X-TVsort-Baseline');
+ $('bridgeApply').disabled=false;
+ status('USB-Export geladen. Originalbackup wurde lokal auf dem Chromebook gespeichert.');
+});
+$('bridgeBackup').onclick=()=>bridgeBusy($('bridgeBackup'),async()=>{
+ status('Sichere USB-Senderliste via ADB …');
+ const response=await bridgeRequest('backup');
+ const data=await response.json();
+ status('Backup erfolgreich erstellt: '+data.backup);
+});
+$('bridgeApply').onclick=()=>bridgeBusy($('bridgeApply'),async()=>{
+ if(!S.loaded||!bridge.baseline)fail('Bitte zuerst mit „Vom USB laden“ die aktuelle Senderliste öffnen.');
+ if(S.fav.join('|')===S.original.join('|'))fail('Keine Favoritenänderung vorhanden.');
+ if(!confirm('TVsort schreibt ausschließlich Favorite.xml auf den USB-Stick. Zuvor wird die komplette Senderliste gesichert. Danach musst du am Philips manuell importieren. Jetzt fortfahren?'))return;
+ status('Prüfe und sichere USB-Export, anschließend Favoriten übertragen …');
+ const blob=await makeExportBlob();
+ const response=await bridgeRequest('apply',{body:blob,headers:{
+   'Content-Type':'application/zip',
+   'X-TVsort-Baseline':bridge.baseline,
+   'X-TVsort-Confirm':'JA'
+ }});
+ const data=await response.json();
+ bridge.baseline=null;
+ $('bridgeApply').disabled=true;
+ status(data.message+'\nBitte jetzt am Fernseher: Senderliste kopieren → Auf Fernseher kopieren.');
+});
+initBridge();
