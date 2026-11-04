@@ -23,7 +23,7 @@ async function load(files){
    if(!uid||byId.has(uid))fail('Doppelte oder fehlende Sender-ID: '+uid);
    let ch={uid,name:decode(a.getAttribute('ChannelName'))||'(Unbenannt)',number:a.getAttribute('ChannelNumber')||'',
      scrambled:a.getAttribute('Scrambled'),locked:a.getAttribute('ChannelLock'),
-     encrypted:a.getAttribute('Scrambled')!=='0',parentalLocked:a.getAttribute('ChannelLock')!=='0'};
+     encrypted:a.hasAttribute('Scrambled')&&a.getAttribute('Scrambled')!=='0',parentalLocked:a.hasAttribute('ChannelLock')&&a.getAttribute('ChannelLock')!=='0'};
    channels.push(ch);byId.set(uid,ch);
  }
  if(!channels.length)fail('Keine Sender in DVBS.xml gefunden.');
@@ -41,8 +41,8 @@ async function load(files){
  Object.assign(S,{files,channels,byId,xml:fv,original:fav.map(x=>x.uid),fav:fav.map(x=>x.uid),history:[],changed:0,loaded:true,drag:null});
  $('total').textContent=channels.length.toLocaleString('de-DE');$('favname').textContent=decode(list[0].getAttribute('Name'))||'Fav1';
  $('filecount').textContent=files.size;
- $('encryptedcount').textContent=channels.filter(x=>x.scrambled==='1').length.toLocaleString('de-DE');
- $('lockedcount').textContent=channels.filter(x=>x.locked==='1').length.toLocaleString('de-DE');
+ $('encryptedcount').textContent=channels.filter(x=>x.encrypted).length.toLocaleString('de-DE');
+ $('lockedcount').textContent=channels.filter(x=>x.parentalLocked).length.toLocaleString('de-DE');
  $('filterEncrypted').checked=true;$('filterLocked').checked=true;
  $('export').disabled=false;$('search').value='';render();
  status('Import erfolgreich: '+channels.length+' Sender, '+fav.length+' Favoriten. Alle Dateien bleiben lokal.');
