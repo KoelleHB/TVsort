@@ -101,7 +101,7 @@ def inspect_zip(filename):
             raise RuntimeError("Unsichere ZIP-Pfade.")
         return {name: archive.read(name) for name in EXPECTED}
 
-def deploy(volume, filename, backups_dir):
+def deploy(volume, filename, backups_dir, confirmed=False):
     check_device()
     remote = mounted_volume(volume)
     proposed = inspect_zip(filename)
@@ -115,6 +115,8 @@ def deploy(volume, filename, backups_dir):
     changes = [rel for rel in EXPECTED if sha(proposed[rel]) != sha(original[rel])]
     print("Abweichende Dateien:", changes or "keine")
     print("Favoriten vorher:", len(original_favs), "| nachher:", len(current_favs))
+    if not changes:
+        raise RuntimeError("Keine Änderungen gegenüber dem USB-Export gefunden.")
     if changes != [FAVORITE]:
         raise RuntimeError("Abbruch: Erwartet wird ausschließlich eine geänderte Favorite.xml. "
                            "Die unveränderte Senderbasis auf dem USB ist Voraussetzung.")
@@ -126,10 +128,11 @@ def deploy(volume, filename, backups_dir):
     print("Originalbackup:", original_dir.resolve())
     print("SHA256 Original:", sha(original[FAVORITE]))
     print("SHA256 Änderung:", sha(proposed[FAVORITE]))
-    confirm = input('Nur Favorite.xml auf dem USB ersetzen? Gib "JA" ein: ').strip()
-    if confirm != "JA":
-        print("Abgebrochen. Keine Änderung am USB.")
-        return
+    if not confirmed:
+        confirm = input('Nur Favorite.xml auf dem USB ersetzen? Gib "JA" ein: ').strip()
+        if confirm != "JA":
+            print("Abgebrochen. Keine Änderung am USB.")
+            return
     with TemporaryDirectory(prefix="tvsort-bridge-") as temp:
         local = Path(temp) / "Favorite.xml"
         local.write_bytes(proposed[FAVORITE])
