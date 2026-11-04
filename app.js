@@ -5,6 +5,8 @@ const required=['ChannelList/Favorite.xml','ChannelList/s2channellib/DVBS.xml','
 function status(s,err=false){let e=$('status');e.hidden=false;e.className=err?'status error':'status';e.textContent=s;}
 function fail(s){throw Error(s);}
 function decode(s){if(!s)return '';try{let a=s.trim().split(/\s+/).map(x=>{if(!/^0x[0-9a-f]{1,2}$/i.test(x))throw 0;return parseInt(x.slice(2),16)});if(a.length%2)return s;return new TextDecoder('utf-16le',{fatal:true}).decode(new Uint8Array(a)).replace(/\0+$/g,'');}catch{return s;}}
+const tvServiceTypes=new Set([1,5,17,22,25,31,32]); // DVB television services; 2/10 are radio
+function isTvService(value){if(value===null||value.trim()==='')return false;let n=Number(value);return Number.isInteger(n)&&tvServiceTypes.has(n);}
 function parse(s,n){let d=new DOMParser().parseFromString(s,'application/xml');if(d.querySelector('parsererror'))fail(n+' ist kein gültiges XML.');return d;}
 function path(files,suffix){let a=[...files.keys()].filter(x=>x.endsWith('/ChannelMap_110/'+suffix)||x==='ChannelMap_110/'+suffix);if(a.length!==1)fail('Datei fehlt oder ist doppelt: '+suffix);return a[0];}
 async function load(files){
@@ -23,7 +25,8 @@ async function load(files){
    if(!uid||byId.has(uid))fail('Doppelte oder fehlende Sender-ID: '+uid);
    let ch={uid,name:decode(a.getAttribute('ChannelName'))||'(Unbenannt)',number:a.getAttribute('ChannelNumber')||'',
      scrambled:a.getAttribute('Scrambled'),locked:a.getAttribute('ChannelLock'),
-     encrypted:a.hasAttribute('Scrambled')&&a.getAttribute('Scrambled')!=='0',parentalLocked:a.hasAttribute('ChannelLock')&&a.getAttribute('ChannelLock')!=='0'};
+     encrypted:a.hasAttribute('Scrambled')&&a.getAttribute('Scrambled')!=='0',parentalLocked:a.hasAttribute('ChannelLock')&&a.getAttribute('ChannelLock')!=='0',
+     serviceType:b.getAttribute('ServiceType'),isTv:isTvService(b.getAttribute('ServiceType'))};
    channels.push(ch);byId.set(uid,ch);
  }
  if(!channels.length)fail('Keine Sender in DVBS.xml gefunden.');
@@ -43,7 +46,8 @@ async function load(files){
  $('filecount').textContent=files.size;
  $('encryptedcount').textContent=channels.filter(x=>x.encrypted).length.toLocaleString('de-DE');
  $('lockedcount').textContent=channels.filter(x=>x.parentalLocked).length.toLocaleString('de-DE');
- $('filterEncrypted').checked=true;$('filterLocked').checked=true;
+ $('filterEncrypted').checked=true;$('filterLocked').checked=true;$('filterTv').checked=true;
+ $('tvcount').textContent=channels.filter(x=>x.isTv).length.toLocaleString('de-DE');
  $('export').disabled=false;$('search').value='';render();
  status('Import erfolgreich: '+channels.length+' Sender, '+fav.length+' Favoriten. Alle Dateien bleiben lokal.');
 }
@@ -60,8 +64,8 @@ function render(){
  $('favcount').textContent=S.fav.length;$('changes').textContent=S.changed;$('undo').disabled=!S.history.length;
  $('reset').disabled=S.original.join('|')===S.fav.join('|');
  let term=$('search').value.toLocaleLowerCase('de').trim(),chosen=new Set(S.fav);
- let hideEncrypted=$('filterEncrypted').checked,hideLocked=$('filterLocked').checked;
- let found=S.channels.filter(x=>(!hideEncrypted||!x.encrypted)&&(!hideLocked||!x.parentalLocked)&&
+ let hideEncrypted=$('filterEncrypted').checked,hideLocked=$('filterLocked').checked,onlyTv=$('filterTv').checked;
+ let found=S.channels.filter(x=>(!hideEncrypted||!x.encrypted)&&(!hideLocked||!x.parentalLocked)&&(!onlyTv||x.isTv)&&
    (x.name.toLocaleLowerCase('de').includes(term)||x.number.includes(term)));
  $('allfoot').textContent=found.length+' Treffer'+(found.length>250?' (erste 250 angezeigt)':'');
  let a=$('all');a.replaceChildren();
@@ -124,6 +128,7 @@ $('zipfile').onchange=async e=>{try{if(e.target.files.length)await importZip(e.t
 $('search').oninput=()=>{if(S.loaded)render()};
 $('filterEncrypted').onchange=()=>{if(S.loaded)render()};
 $('filterLocked').onchange=()=>{if(S.loaded)render()};
+$('filterTv').onchange=()=>{if(S.loaded)render()};
 $('undo').onclick=()=>{if(!S.history.length)return;S.fav=S.history.pop();S.changed++;render()};
 $('reset').onclick=()=>mutate(()=>{S.fav=[...S.original]});
 $('export').onclick=async()=>{try{$('export').disabled=true;await exportAll()}catch(x){error(x)}finally{$('export').disabled=!S.loaded}};
