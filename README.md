@@ -1,6 +1,6 @@
 # TVsort
 
-Ein lokaler, browserbasierter Favoriten-Editor für Philips `PhilipsChannelMaps/ChannelMap_110` – entwickelt für ChromeOS, ohne Wine und ohne Backend.
+Ein browserbasierter Favoriten-Editor für Philips `PhilipsChannelMaps/ChannelMap_110` – entwickelt für ChromeOS, ohne Wine. Wahlweise statisch oder mit lokaler ADB-Bridge.
 
 ## Funktionen (MVP)
 
@@ -22,6 +22,29 @@ Die Webapp ist eine statische `index.html`. Entweder direkt im Browser öffnen o
 Vom Fernseher vollständigen Ordner `PhilipsChannelMaps` exportieren und **unverändert sichern**. In TVsort über **Ordner öffnen** diesen Ordner auswählen; alternativ den kompletten Ordner als ZIP-Datei bereitstellen.
 
 Nach dem Bearbeiten **Gesamten Export als ZIP speichern**. Erst nach sorgfältiger Überprüfung der erzeugten Dateien das ZIP entpacken und den Ordner `PhilipsChannelMaps` auf den USB-Stick kopieren.
+
+## ChromeOS: TVsort mit lokaler Direktverbindung (empfohlen)
+
+TVsort kann die Oberfläche und einen ADB-Helfer **unter derselben lokalen Adresse** starten. Dadurch entfallen Downloads, ZIP-Entpacken und Terminalbefehle bei jedem Senderlistenwechsel.
+
+```bash
+cd ~/TVsort
+git pull
+python3 tools/tvsort_server.py
+```
+
+In Chrome auf dem Chromebook **http://localhost:8765** öffnen (nicht die GitHub-Pages-Adresse).
+
+Der Kasten **„Direktverbindung zum Philips“** bietet:
+- **Vom USB laden**: Liest die bereits per Philips-Menü auf den TVsort-Stick exportierte Senderliste via ADB und erstellt gleichzeitig ein lokales Originalbackup.
+- **Backup erstellen**: Speichert die komplette USB-Senderliste erneut als datiertes Backup.
+- **Auf USB übertragen**: Nach expliziter Rückfrage prüft der Server die vollständige ZIP-Datei, die unveränderten neun übrigen Dateien, die Zuordnung der Sender-IDs sowie den aktuellen USB-Ausgangszustand. Er erstellt erneut ein Backup, schreibt ausschließlich `Favorite.xml` und liest sie zur Prüfsumme zurück.
+
+**Wichtig:** „Vom USB laden“ liest den **USB-Export**, nicht die interne Philips-Senderdatenbank. Für einen aktuellen Stand auf dem TV vorher **Senderliste kopieren → Auf USB kopieren** ausführen. Nach „Auf USB übertragen“ auf dem TV **Auf Fernseher kopieren** wählen. Diese Philips-Menüschritte sind weiterhin manuell.
+
+**Sicherheit:** Der Server bindet ausschließlich an `127.0.0.1:8765`, verwendet Same-Origin, einen Sitzungstoken sowie eine zusätzliche Schreibbestätigung. Er ist kein öffentlich erreichbarer Dienst. Alle Dateien bleiben lokal. Beim Beenden im Terminal **Strg+C** drücken. Nicht über Portfreigaben, öffentliche Tunnel oder Proxy-Dienste exponieren.
+
+Für den lokalen Webserver sind nur Python 3 und ADB nötig; die Oberfläche verwendet JSZip von einem CDN und benötigt hierfür gegebenenfalls Internet. Bestehende USB-ID: `0F0B-2C4A`; bei Änderung `python3 tools/tvsort_server.py --volume XXXX-XXXX`. Die Backup-Dateien liegen unter `~/philips-debloat/channelmaps/bridge-backups/`.
 
 ## ChromeOS: automatisierter USB-Transfer mit TVsort Bridge
 
