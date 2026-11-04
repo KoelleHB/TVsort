@@ -1,6 +1,8 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const S={files:new Map(),channels:[],byId:new Map(),original:[],fav:[],history:[],xml:'',changed:0,loaded:false,drag:null};
+const PAGE_SIZE=100;
+let libraryPage=0;
 const required=['ChannelList/Favorite.xml','ChannelList/s2channellib/DVBS.xml','ChannelList/channelFile.bin','ChannelList/chanLst.bin'];
 function status(s,err=false){let e=$('status');e.hidden=false;e.className=err?'status error':'status';e.textContent=s;}
 function fail(s){throw Error(s);}
@@ -48,7 +50,7 @@ async function load(files){
  $('lockedcount').textContent=channels.filter(x=>x.parentalLocked).length.toLocaleString('de-DE');
  $('filterEncrypted').checked=true;$('filterLocked').checked=true;$('filterTv').checked=true;
  $('tvcount').textContent=channels.filter(x=>x.isTv).length.toLocaleString('de-DE');
- $('export').disabled=false;$('search').value='';render();
+ $('export').disabled=false;$('search').value='';libraryPage=0;render();
  status('Import erfolgreich: '+channels.length+' Sender, '+fav.length+' Favoriten. Alle Dateien bleiben lokal.');
 }
 async function importFolder(list){let m=new Map();for(let file of list)m.set(file.webkitRelativePath.replaceAll('\\','/'),{text:()=>file.text(),bytes:()=>file.arrayBuffer()});await load(m);}
@@ -67,9 +69,15 @@ function render(){
  let hideEncrypted=$('filterEncrypted').checked,hideLocked=$('filterLocked').checked,onlyTv=$('filterTv').checked;
  let found=S.channels.filter(x=>(!hideEncrypted||!x.encrypted)&&(!hideLocked||!x.parentalLocked)&&(!onlyTv||x.isTv)&&
    (x.name.toLocaleLowerCase('de').includes(term)||x.number.includes(term)));
- $('allfoot').textContent=found.length+' Treffer'+(found.length>250?' (erste 250 angezeigt)':'');
+ const totalPages=Math.max(1,Math.ceil(found.length/PAGE_SIZE));
+ libraryPage=Math.min(libraryPage,totalPages-1);
+ const from=libraryPage*PAGE_SIZE;
+ $('allfoot').textContent=found.length.toLocaleString('de-DE')+' Treffer · '+(found.length?from+1:0)+'–'+Math.min(from+PAGE_SIZE,found.length)+' sichtbar';
+ $('pageInfo').textContent='Seite '+(libraryPage+1)+' von '+totalPages;
+ $('previousPage').disabled=libraryPage===0;
+ $('nextPage').disabled=libraryPage>=totalPages-1;
  let a=$('all');a.replaceChildren();
- for(let c of found.slice(0,250)){
+ for(let c of found.slice(from,from+PAGE_SIZE)){
    let row=document.createElement('div');row.className='item';
    let number=document.createElement('span');number.className='number';number.textContent='#'+c.number;
    let name=document.createElement('span');name.className='name';name.textContent=c.name;
@@ -125,10 +133,12 @@ async function exportAll(){
 function error(e){console.error(e);status(e.message||String(e),true);}
 $('folder').onchange=async e=>{try{if(e.target.files.length)await importFolder(e.target.files)}catch(x){error(x)}finally{e.target.value=''}};
 $('zipfile').onchange=async e=>{try{if(e.target.files.length)await importZip(e.target.files[0])}catch(x){error(x)}finally{e.target.value=''}};
-$('search').oninput=()=>{if(S.loaded)render()};
-$('filterEncrypted').onchange=()=>{if(S.loaded)render()};
-$('filterLocked').onchange=()=>{if(S.loaded)render()};
-$('filterTv').onchange=()=>{if(S.loaded)render()};
+$('search').oninput=()=>{libraryPage=0;if(S.loaded)render()};
+$('previousPage').onclick=()=>{if(libraryPage>0){libraryPage--;render();$('all').scrollTop=0}};
+$('nextPage').onclick=()=>{libraryPage++;render();$('all').scrollTop=0};
+$('filterEncrypted').onchange=()=>{libraryPage=0;if(S.loaded)render()};
+$('filterLocked').onchange=()=>{libraryPage=0;if(S.loaded)render()};
+$('filterTv').onchange=()=>{libraryPage=0;if(S.loaded)render()};
 $('undo').onclick=()=>{if(!S.history.length)return;S.fav=S.history.pop();S.changed++;render()};
 $('reset').onclick=()=>mutate(()=>{S.fav=[...S.original]});
 $('export').onclick=async()=>{try{$('export').disabled=true;await exportAll()}catch(x){error(x)}finally{$('export').disabled=!S.loaded}};
